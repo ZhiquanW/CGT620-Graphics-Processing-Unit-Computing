@@ -1,0 +1,14 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/zhiquan/Git-Repositories/CGT620-Graphics-Processing-Unit-Computing/lab2/main.cu
+cstdio
+-
+cuda.h
+/home/zhiquan/Git-Repositories/CGT620-Graphics-Processing-Unit-Computing/lab2/cuda.h
+
