@@ -1,0 +1,4 @@
+/home/zhiquan/.local/share/JetBrains/Toolbox/apps/CLion/ch-0/202.7319.72/bin/cmake/linux/bin/cmake -DCMAKE_BUILD_TYPE=Release /usr/local/cuda/bin/nvcc -G "CodeBlocks - Unix Makefiles" /home/zhiquan/Git-Repositories/CGT620-Graphics-Processing-Unit-Computing/lab5
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/zhiquan/Git-Repositories/CGT620-Graphics-Processing-Unit-Computing/lab5/cmake-build-release
