@@ -39,7 +39,8 @@
 #include "ElementBufferObject.h"
 #include "Texture.h"
 #include "Camera.h"
-
+#include<time.h>
+#include <helper_math.h>
 class ZWEngine {
 public:
     ZWEngine();
@@ -65,7 +66,8 @@ private:
     GLfloat last_time;
     // custom varibles
     GLuint uniform_failed_id = -1;
-    GLfloat obj_angle = 0.0f;
+    GLfloat obj_angle_y = -60.0f;
+    GLfloat obj_angle_x = -45.0f;
     struct cudaGraphicsResource *cuda_vbo_resource;
     GLuint vbo;
     //functions

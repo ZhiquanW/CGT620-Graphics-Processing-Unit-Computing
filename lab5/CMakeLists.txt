@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD 14)
 include_directories(include)
 include_directories(/usr/local/cuda/include)
 include_directories(/usr/local/cuda/samples/common/inc)
+include_directories(/usr/local/cuda/)
 aux_source_directory(src source_files)
 aux_source_directory(imgui imgui_files)
 

@@ -5,59 +5,78 @@
 // Copyright (c) 2020 Zhiquan Wang. All rights reserved.
 //
 #include "ZWEngine.h"
-#include "../../../../../../usr/local/cuda/targets/x86_64-linux/include/cuda_gl_interop.h"
 
 //#define STB_IMAGE_IMPLEMENTATION
 //
 //#include "stb_image.h"
 static ZWEngine *self;
+GLuint mesh_width =100;
+GLuint mesh_height = 100;
+dim3 block(16, 16, 1);
+dim3 grid(ceil((float) mesh_width / block.x), ceil((float) mesh_height / block.y), 1);
+std::vector<GLfloat> terrain_vertices;
+std::vector<GLuint> terrain_indices;
+GLuint max_iter = 1000;
+GLuint iter = 0;
+float cam_dis = 100.0f;
+__constant__ float d_fault_info[4];
 
+__global__ void fault_cut_kernel(float3 *ptr, unsigned int width, unsigned int height) {
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    float3 color_0 = make_float3(0.0f, 0.0f, 0.8f);
+    float3 color_1 = make_float3(0.0f, 0.7, 0.0f);
+    float2 r_pos = make_float2(d_fault_info[0], d_fault_info[1]);
+    float2 r_dir = make_float2(d_fault_info[2], d_fault_info[3]);
+    // write output vertex
+    unsigned int offset = 2 * (x * width + y);
+    if (offset + 1 < width * height * 2) {
+        float3 pos = ptr[offset];
+        float2 pos_2d = make_float2(pos.x, pos.y);
+        float cur_dir = (float)(dot(r_dir, pos_2d - r_pos) < 0) * 2.0f - 1.0f;
+        ptr[offset] -= make_float3(0.0f, 0.0f,cur_dir* 0.2f);
+        ptr[offset + 1] = color_0 + (color_1 - color_0) * (ptr[offset].z * 0.05f + 0.5f);
+    }
+}
 
 // Opengl functions
 void ZWEngine::set_render_info() {
     glEnable(GL_DEPTH_TEST);
+    srand(time(0));
 
     // Set Render
     self = this;
     Camera main_cam;
-    main_camera.set_pos(glm::vec3(0, 0, 5));
+    main_camera.set_pos(glm::vec3(0, 0, cam_dis));
     this->attach_camera(main_camera);
     glfwSetFramebufferSizeCallback(this->window, framebuffer_size_callback);
     shader_program->use_shader_program();
 
-//    std::vector<GLfloat> vertices = {-1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f,
-//                                     -1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-//                                     -1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-//                                     -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-//                                     1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f,
-//                                     1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
-//                                     1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-//                                     1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f};
-    std::vector<GLfloat> terrain_vertices = {
-            -1.0f, -1.0f, 0.0f, 0.4f, 0.6f, 0.5f,
-            -1.0f, 1.0f, 0.0f, 0.4f, 0.6f, 0.5f,
-            1.0f, -1.0f, 0.0f, 0.4f, 0.6f, 0.5f,
-            1.0f, 1.0f, 0.0f, 0.4f, 0.6f, 0.5f,
-    };
-    std::vector<GLuint> terrain_indices = {
-            0, 1, 2,
-            2, 1, 3
-    };
-
-//    std::vector<GLuint> indices = {
-//            0, 2, 1,
-//            0, 4, 1,
-//            0, 2, 4,
-//            3, 7, 1,
-//            3, 1, 2,
-//            3, 2, 7,
-//            6, 2, 7,
-//            6, 4, 7,
-//            6, 2, 4,
-//            5, 1, 7,
-//            5, 4, 7,
-//            5, 1, 4,
-//    };
+    float left_boundary = -(float) mesh_width / 2.0f;
+    float low_boundary = -(float) mesh_height / 2.0f;
+    for (int i = 0; i < mesh_height; ++i) {
+        for (int j = 0; j < mesh_height; ++j) {
+            float h = low_boundary + (float) i;
+            float w = left_boundary + (float) j;
+            terrain_vertices.push_back(w);
+            terrain_vertices.push_back(h);
+            terrain_vertices.push_back(0.0f);
+            terrain_vertices.push_back(0.4f);
+            terrain_vertices.push_back(0.6f);
+            terrain_vertices.push_back(0.5f);
+        }
+    }
+    for (int i = 0; i < mesh_width - 1; ++i) {
+        for (int j = 0; j < mesh_height - 1; ++j) {
+            GLuint idx = j * mesh_width + i;
+            terrain_indices.push_back(idx);
+            terrain_indices.push_back(idx + mesh_width);
+            terrain_indices.push_back(idx + 1);
+            terrain_indices.push_back(idx + 1);
+            terrain_indices.push_back(idx + mesh_width);
+            terrain_indices.push_back(idx + mesh_width + 1);
+        }
+    }
 
     VertexArrayObject vao(true);
     VertexBufferObject vbo(terrain_vertices, GL_STATIC_DRAW);
@@ -94,18 +113,43 @@ void ZWEngine::render_ui() {
         ImGui::Text("%s", tmp.c_str());
     }
 
-    ImGui::SliderFloat("obj angle: ", &obj_angle, -180.0f, 180.0f);
-    ImGui::SliderFloat2("camera angle", &this->main_camera.get_pitch_yaw()[0], -180, 180);
+    ImGui::SliderFloat("obj angle y: ", &obj_angle_y, -180.0f, 180.0f);
+    ImGui::SliderFloat("obj angle x: ", &obj_angle_x, -180.0f, 180.0f);
+    ImGui::SliderFloat("camera dis:",&cam_dis,0,400.0f);
+    ImGui::SliderFloat2("camera angle:", &this->main_camera.get_pitch_yaw()[0], -180, 180);
     ImGui::End();
     ImGui::Render();
 }
 
 void ZWEngine::render_world() {
+    if (iter < max_iter) {
+        float h_fault_info[4];
+        h_fault_info[0] = rand() % mesh_width - mesh_width / 2.0f;
+        h_fault_info[1] = rand() % mesh_height - mesh_height / 2.0f;
+        float2 rand_dir = normalize(
+                make_float2(rand() % mesh_width - mesh_width / 2.0f, rand() % mesh_height - mesh_height / 2.0f));
+        h_fault_info[2] = rand_dir.x;
+        h_fault_info[3] = rand_dir.y;
+        GLuint fault_info_len = 4 * sizeof(float);
+        cudaMemcpyToSymbol(d_fault_info, h_fault_info, fault_info_len); //copy values
+        // map OpenGL buffer object for writing from CUDA
+        float3 *dptr;
+        checkCudaErrors(cudaGraphicsMapResources(1, &this->cuda_vbo_resource, nullptr));
+        size_t num_bytes;
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **) &dptr, &num_bytes,
+                                                             this->cuda_vbo_resource));
+        fault_cut_kernel<<<grid, block>>>(dptr, mesh_width, mesh_height);
+        checkCudaErrors(cudaGraphicsUnmapResources(1, &this->cuda_vbo_resource, nullptr));
+        iter++;
+    }
+
+
     // clear buffers
     glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glm::mat4 model = glm::rotate(glm::radians(this->obj_angle), glm::vec3(0.0f, 1.0f, 0.0f));
+    main_camera.set_pos(glm::vec3(0, 0, cam_dis));
+    glm::mat4 model = glm::rotate(glm::radians(this->obj_angle_y), glm::vec3(0.0f, 1.0f, 0.0f))
+                      * glm::rotate(glm::radians(this->obj_angle_x), glm::vec3(1.0f, 0.0f, 0.0f));
     if (!shader_program->set_uniform_mat4fv(2, model)) {
         this->uniform_failed_id = 2;
     }
@@ -119,15 +163,8 @@ void ZWEngine::render_world() {
     }
 //    this->activate_texture();
     this->activate_vao("tmp_vao");
-    // map OpenGL buffer object for writing from CUDA
-    float4 *dptr;
-    checkCudaErrors(cudaGraphicsMapResources(1, &this->cuda_vbo_resource, nullptr));
-    size_t num_bytes;
-    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **) &dptr, &num_bytes,
-                                                         this->cuda_vbo_resource));
-    printf("CUDA mapped VBO: May access %ld bytes\n", num_bytes);
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &this->cuda_vbo_resource, nullptr));
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    glDrawElements(GL_TRIANGLES, terrain_indices.size(), GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

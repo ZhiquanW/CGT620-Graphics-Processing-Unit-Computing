@@ -136,6 +136,7 @@ void ZWEngine::cleanup() {
     for (itor_vao = this->vao_map.begin(); itor_vao != this->vao_map.end(); ++itor_vao) {
         itor_vao->second.release();
     }
+    cudaDeviceReset();
     //  clean textures
     std::vector<Texture>::iterator itor_tex;
     for (itor_tex = this->texture_list.begin(); itor_tex != this->texture_list.end(); ++itor_tex) {
