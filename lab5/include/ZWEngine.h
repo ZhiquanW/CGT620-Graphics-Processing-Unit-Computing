@@ -40,6 +40,7 @@
 #include "Texture.h"
 #include "Camera.h"
 #include<time.h>
+#include <string>
 #include <helper_math.h>
 class ZWEngine {
 public:

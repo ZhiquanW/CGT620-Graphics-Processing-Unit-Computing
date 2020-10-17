@@ -9,16 +9,18 @@
 //#define STB_IMAGE_IMPLEMENTATION
 //
 //#include "stb_image.h"
+#define enable_GPU false
 static ZWEngine *self;
-GLuint mesh_width =100;
-GLuint mesh_height = 100;
+GLuint mesh_width =500;
+GLuint mesh_height = 500;
 dim3 block(16, 16, 1);
 dim3 grid(ceil((float) mesh_width / block.x), ceil((float) mesh_height / block.y), 1);
 std::vector<GLfloat> terrain_vertices;
 std::vector<GLuint> terrain_indices;
-GLuint max_iter = 1000;
+GLuint max_iter =15000;
 GLuint iter = 0;
-float cam_dis = 100.0f;
+float cam_dis = 1000.0f;
+GLfloat timer =0 ;
 __constant__ float d_fault_info[4];
 
 __global__ void fault_cut_kernel(float3 *ptr, unsigned int width, unsigned int height) {
@@ -34,7 +36,7 @@ __global__ void fault_cut_kernel(float3 *ptr, unsigned int width, unsigned int h
         float3 pos = ptr[offset];
         float2 pos_2d = make_float2(pos.x, pos.y);
         float cur_dir = (float)(dot(r_dir, pos_2d - r_pos) < 0) * 2.0f - 1.0f;
-        ptr[offset] -= make_float3(0.0f, 0.0f,cur_dir* 0.2f);
+        ptr[offset] -= make_float3(0.0f, 0.0f,cur_dir* 0.1f);
         ptr[offset + 1] = color_0 + (color_1 - color_0) * (ptr[offset].z * 0.05f + 0.5f);
     }
 }
@@ -115,8 +117,9 @@ void ZWEngine::render_ui() {
 
     ImGui::SliderFloat("obj angle y: ", &obj_angle_y, -180.0f, 180.0f);
     ImGui::SliderFloat("obj angle x: ", &obj_angle_x, -180.0f, 180.0f);
-    ImGui::SliderFloat("camera dis:",&cam_dis,0,400.0f);
+    ImGui::SliderFloat("camera dis:",&cam_dis,0,1200.0f);
     ImGui::SliderFloat2("camera angle:", &this->main_camera.get_pitch_yaw()[0], -180, 180);
+    ImGui::Text(std::to_string(timer).c_str());
     ImGui::End();
     ImGui::Render();
 }
@@ -126,21 +129,54 @@ void ZWEngine::render_world() {
         float h_fault_info[4];
         h_fault_info[0] = rand() % mesh_width - mesh_width / 2.0f;
         h_fault_info[1] = rand() % mesh_height - mesh_height / 2.0f;
+        float2 rand_pos = make_float2(h_fault_info[0],h_fault_info[1]);
         float2 rand_dir = normalize(
                 make_float2(rand() % mesh_width - mesh_width / 2.0f, rand() % mesh_height - mesh_height / 2.0f));
         h_fault_info[2] = rand_dir.x;
         h_fault_info[3] = rand_dir.y;
-        GLuint fault_info_len = 4 * sizeof(float);
-        cudaMemcpyToSymbol(d_fault_info, h_fault_info, fault_info_len); //copy values
-        // map OpenGL buffer object for writing from CUDA
-        float3 *dptr;
-        checkCudaErrors(cudaGraphicsMapResources(1, &this->cuda_vbo_resource, nullptr));
-        size_t num_bytes;
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **) &dptr, &num_bytes,
-                                                             this->cuda_vbo_resource));
-        fault_cut_kernel<<<grid, block>>>(dptr, mesh_width, mesh_height);
-        checkCudaErrors(cudaGraphicsUnmapResources(1, &this->cuda_vbo_resource, nullptr));
+        if (enable_GPU){
+            GLuint fault_info_len = 4 * sizeof(float);
+            cudaMemcpyToSymbol(d_fault_info, h_fault_info, fault_info_len); //copy values
+            // map OpenGL buffer object for writing from CUDA
+            float3 *dptr;
+            checkCudaErrors(cudaGraphicsMapResources(1, &this->cuda_vbo_resource, nullptr));
+            size_t num_bytes;
+            checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **) &dptr, &num_bytes,
+                                                                 this->cuda_vbo_resource));
+            fault_cut_kernel<<<grid, block>>>(dptr, mesh_width, mesh_height);
+            checkCudaErrors(cudaGraphicsUnmapResources(1, &this->cuda_vbo_resource, nullptr));
+        }else{
+            glBindBuffer(GL_ARRAY_BUFFER, this->vao_map["tmp_vao"].vbo_list[0]);
+            float* ptr = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+            for (int i =0;i < terrain_vertices.size();i+=6){
+                float3 pos = make_float3(terrain_vertices[i],terrain_vertices[i+1],terrain_vertices[i+2]);
+                float3 col = make_float3(terrain_vertices[i+3],terrain_vertices[i+4],terrain_vertices[i+5]);
+                float2 pos_2d = make_float2(pos.x, pos.y);
+                float cur_dir = (float)(dot(rand_dir, pos_2d - rand_pos) < 0) * 2.0f - 1.0f;
+                pos -= make_float3(0.0f, 0.0f,cur_dir* 0.1f);
+                float3 color_0 = make_float3(0.0f, 0.0f, 0.8f);
+                float3 color_1 = make_float3(0.0f, 0.7, 0.0f);
+                col = color_0 + (color_1 - color_0) * (pos.z * 0.05f + 0.5f);
+                terrain_vertices[i] = pos.x;
+                terrain_vertices[i+1] = pos.y;
+                terrain_vertices[i+2] = pos.z;
+                terrain_vertices[i+3] = col.x;
+                terrain_vertices[i+4] = col.y;
+                terrain_vertices[i+5] = col.z;
+
+            }
+
+            if (ptr) {
+                std::copy(terrain_vertices.begin(), terrain_vertices.end(), ptr);
+                glUnmapBuffer(GL_ARRAY_BUFFER);
+            }
+        }
+
+
         iter++;
+        if (iter==max_iter){
+            timer = this->last_time;
+        }
     }
 
 

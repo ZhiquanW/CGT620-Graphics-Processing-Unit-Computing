@@ -16,9 +16,10 @@
 class VertexArrayObject {
 private:
     GLuint vao_id;
-    std::vector<GLuint> vbo_list;
     std::vector<GLuint> ebo_list;
 public:
+    std::vector<GLuint> vbo_list;
+
     VertexArrayObject();
 
     explicit VertexArrayObject(bool);

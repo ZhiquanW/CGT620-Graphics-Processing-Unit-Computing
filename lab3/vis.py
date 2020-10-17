@@ -22,16 +22,17 @@ import numpy as np
 
 
 # N = 100
-x0 = [5, 15, 30, 50, 60, 100]
-y0 = [200, 4591, 13464, 28432, 37818, 67865]
+x0 = [50, 100, 200, 400, 600, 1000, 1500]
+y0 = [1.098, 1.854, 3.41, 6.9287, 13.564, 13.75, 16.921, 25.335]
+y1 = [3.23, 6.014, 11.6, 24.626, 34.242, 45.692, 58.0958, 85.615]
 fig = go.Figure()
 
 # Add traces
 fig.add_trace(go.Scatter(x=x0, y=y0,
                          mode='lines+markers',
-                         name='Tri Blur'))
-# fig.add_trace(go.Scatter(x=x1, y=y1,
-#  mode='lines+markers',
-#  name='device memory'))
+                         name='GPU'))
+fig.add_trace(go.Scatter(x=x0, y=y1,
+                         mode='lines+markers',
+                         name='CPU'))
 
 fig.show()
