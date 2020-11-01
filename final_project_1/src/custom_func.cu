@@ -7,7 +7,7 @@
 #include "ZWEngine.h"
 #define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
 
-
+#include <glm/glm.hpp>
 #include "tiny_obj_loader.h"
 
 //#define STB_IMAGE_IMPLEMENTATION
@@ -259,7 +259,7 @@ void ZWEngine::render_world() {
                     terrain_vertices[i + 2] = ((GLfloat) rand() / RAND_MAX) * max_height;
                     float3 color_0 = make_float3(0.0f, 0.0f, 0.8f);
                     float3 color_1 = make_float3(0.0f, 0.7, 0.0f);
-                    float3 col = color_0 + (color_1 - color_0) * ((max_height - terrain_vertices[i + 2]) / max_height);
+                    float3 col = color_0 + color_1;//(color_1 - color_0) * ((max_height - terrain_vertices[i + 2]) / max_height);
                     terrain_vertices[i + 3] = col.x;
                     terrain_vertices[i + 4] = col.y;
                     terrain_vertices[i + 5] = col.z;
