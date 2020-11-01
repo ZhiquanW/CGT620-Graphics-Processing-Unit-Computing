@@ -5,72 +5,31 @@
 #ifndef TERRAIN_GENERATOR_TERRAIN_MANAGER_CUH
 #define TERRAIN_GENERATOR_TERRAIN_MANAGER_CUH
 
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-#include "obj.h"
-#include "glm/glm.hpp"
-#include <vector>
-#include <random>
-#include <iostream>
-#include <algorithm>    // std::sort
-
-#define checkCudaErrors(val) check_cuda((val), #val, __FILE__, __LINE__)
+#include "utils.cuh"
+#include "kernels.cuh"
 
 using namespace std;
 using namespace wow;
 
-void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
-    if (result) {
-        fprintf(stderr, "Kernel launch failed: %s\n", cudaGetErrorString(result));
-        std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " << file << ":" << line << " '"
-                  << func << "' \n";
-        // Make sure we call CUDA Device Reset before exiting
-        cudaDeviceReset();
-        exit(99);
-    }
-}
 
-void progress_indicator(const int pos, const int total, const int bar_width) {
-    float progress = float(pos) / float(total);
-
-    int val = (int) (progress * 100);
-    if (val == (int) (float(pos + 1) / float(total) * 100)) {
-        return;
-    }
-    int lpad = (int) (progress * float(bar_width));
-    int rpad = bar_width - lpad;
-    std::string pre_str;
-    for (int i = 0; i < bar_width; ++i) {
-        pre_str += "|";
-    }
-    printf("\r%3d%% [%.*s%*s] (%.d/%.d)", val, lpad, pre_str.c_str(), rpad, "", pos, total);
-    fflush(stdout);
-}
-
-__global__ void d_gen_gaps(float *d_vertices, const uint *d_gap_info, uint n, float w, float r) {
-    unsigned int row_id = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int col_id = blockIdx.y * blockDim.y + threadIdx.y;
-    unsigned int v_offset = 6 * (row_id * 500 + col_id);
-    bool in_range = false;
-    float tmp_line = 0;
-    for (int i = 0; i < n; ++i) {
-        tmp_line = (float)d_gap_info[i];
-        printf("%f %d\n",tmp_line,row_id);
-        if (tmp_line - r < (float)row_id && (float)row_id < tmp_line + r) {
-            d_vertices[v_offset+2] = -100.0f;
-            printf("################\n");
-        }
-    }
-}
 class terrain_manager {
 
 public:
     std::vector<float> h_terrain_vertices;
     uint height;
     uint width;
+    const uint GRID_LEN;
+    dim3 grid_size;
+    dim3 block_size;
 
-    terrain_manager(uint h, uint w) : height(h), width(w) {
+    terrain_manager(uint h, uint w) : height(h),
+                                      width(w),
+                                      GRID_LEN(64),
+                                      grid_size(GRID_LEN,GRID_LEN),
+                                      block_size((uint) ceil((float) this->height / GRID_LEN), (uint)ceil(
+                                              (float) this->width / GRID_LEN)){
 //        h_terrain_vertices.resize(w * h * 6);
+
         this->init_flat();
     }
 
@@ -105,9 +64,7 @@ public:
     }
 
 
-
-    void gap_terrain(uint num, float w, float r) {
-
+    void gap_terrain(uint num, float r) {
         std::random_device rd;
         std::mt19937 mt(rd());
         std::uniform_real_distribution<double> dist(0, height);
@@ -117,7 +74,6 @@ public:
         }
 
         sort(gap_dis_list.begin(), gap_dis_list.end());
-        const uint GRID_LEN = num;
         std::size_t data_size = this->h_terrain_vertices.size() * sizeof(float);
         float *d_vertices;
         checkCudaErrors(cudaMalloc(&d_vertices, data_size));
@@ -126,14 +82,16 @@ public:
         uint *d_gap_info;
         checkCudaErrors(cudaMalloc(&d_gap_info, data_size));
         checkCudaErrors(cudaMemcpy(d_gap_info, gap_dis_list.data(), data_size, cudaMemcpyHostToDevice));
-        float *h_results = new float [this->h_terrain_vertices.size() * sizeof(float )];
-        dim3 grid_size(GRID_LEN);
-        dim3 block_size(ceil((float) this->height / GRID_LEN), ceil((float) this->width / GRID_LEN));
-        d_gen_gaps <<< grid_size, block_size>>>(d_vertices, d_gap_info, num, w, r);
+        float *h_results = new float[this->h_terrain_vertices.size() * sizeof(float)];
+//        grid_size = dim3(GRID_LEN, GRID_LEN);
+//        block_size = dim3((uint) ceil((float) this->height / GRID_LEN), (uint)ceil(
+//                (float) this->width / GRID_LEN));
+        kernel_gen_gaps <<< grid_size, block_size>>>(d_vertices, d_gap_info, this->height, this->width, num, r);
         checkCudaErrors(cudaGetLastError());
         checkCudaErrors(cudaDeviceSynchronize());
-        checkCudaErrors(cudaMemcpy(h_results,d_vertices,this->h_terrain_vertices.size()*sizeof(float),cudaMemcpyDeviceToHost));
-        for (int i = 0;i < this->h_terrain_vertices.size();++ i){
+        checkCudaErrors(cudaMemcpy(h_results, d_vertices, this->h_terrain_vertices.size() * sizeof(float),
+                                   cudaMemcpyDeviceToHost));
+        for (int i = 0; i < this->h_terrain_vertices.size(); ++i) {
             h_terrain_vertices[i] = h_results[i];
         }
         free(h_results);
@@ -141,7 +99,125 @@ public:
         cudaFree(d_gap_info);
     }
 
+    void stair_terrain(glm::vec2 f_range, glm::vec2 stair_h_range) {
+        vector<float> h_forward_info;
+        vector<float> h_height_info;
+        std::random_device rd;
+        std::mt19937 mt(rd());
+        std::uniform_real_distribution<float> forward_dist(f_range.x, f_range.y);
+        std::uniform_real_distribution<float> h_dist(stair_h_range.x, stair_h_range.y);
+        h_forward_info.emplace_back(0.0f);
+        h_height_info.emplace_back(0.0f);
+        while (true) {
+            float new_forward = h_forward_info.back() + forward_dist(mt);
+            float new_stair_height = h_height_info.back() + h_dist(mt);
+            if (new_forward > this->height) {
+                new_forward = this->height;
+                h_forward_info.emplace_back(new_forward);
+                h_height_info.emplace_back(new_stair_height);
+                break;
+            }
+            h_forward_info.emplace_back(new_forward);
+            h_height_info.emplace_back(new_stair_height);
+        }
+        std::size_t data_size = this->h_terrain_vertices.size() * sizeof(float);
+        float *d_vertices;
+        checkCudaErrors(cudaMalloc(&d_vertices, data_size));
+        checkCudaErrors(cudaMemcpy(d_vertices, h_terrain_vertices.data(), data_size, cudaMemcpyHostToDevice));
+        data_size = h_forward_info.size() * sizeof(float);
+        float *d_forward_info;
+        checkCudaErrors(cudaMalloc(&d_forward_info, data_size));
+        checkCudaErrors(cudaMemcpy(d_forward_info, h_forward_info.data(), data_size, cudaMemcpyHostToDevice));
+        data_size = h_height_info.size() * sizeof(float);
+        float *d_height_info;
+        checkCudaErrors(cudaMalloc(&d_height_info, data_size));
+        checkCudaErrors(cudaMemcpy(d_height_info, h_height_info.data(), data_size, cudaMemcpyHostToDevice));
+        kernel_gen_stairs<<<grid_size, block_size>>>(d_forward_info, d_height_info, h_forward_info.size(), d_vertices,
+                                                     this->height, this->width);
+        checkCudaErrors(cudaGetLastError());
+        checkCudaErrors(cudaDeviceSynchronize());
+        float *h_results = new float[this->h_terrain_vertices.size() * sizeof(float)];
+        checkCudaErrors(cudaMemcpy(h_results, d_vertices, this->h_terrain_vertices.size() * sizeof(float),
+                                   cudaMemcpyDeviceToHost));
+        for (int i = 0; i < this->h_terrain_vertices.size(); ++i) {
+            h_terrain_vertices[i] = h_results[i];
+        }
+        free(h_results);
+        cudaFree(d_vertices);
+        cudaFree(d_forward_info);
+        cudaFree(d_height_info);
 
+    }
+
+    void wall_terrain(uint num, glm::vec2 r){
+        std::random_device rd;
+        std::mt19937 mt(rd());
+        std::uniform_real_distribution<double> dist(0, height);
+        std::uniform_real_distribution<double> r_dist(r.x, r.y);
+        vector<uint> gap_dis_list(num);
+        vector<float> wall_r(num);
+        for (int i = 0; i < num; ++i) {
+            gap_dis_list[i] = (uint) dist(mt);
+            wall_r[i] = r_dist(mt);
+        }
+        sort(gap_dis_list.begin(), gap_dis_list.end());
+        std::size_t data_size = this->h_terrain_vertices.size() * sizeof(float);
+        float *d_vertices;
+        checkCudaErrors(cudaMalloc(&d_vertices, data_size));
+        checkCudaErrors(cudaMemcpy(d_vertices, h_terrain_vertices.data(), data_size, cudaMemcpyHostToDevice));
+        data_size = gap_dis_list.size() * sizeof(uint);
+        uint *d_gap_info;
+        checkCudaErrors(cudaMalloc(&d_gap_info, data_size));
+        checkCudaErrors(cudaMemcpy(d_gap_info, gap_dis_list.data(), data_size, cudaMemcpyHostToDevice));
+        float * d_wall_r;
+        checkCudaErrors(cudaMalloc(&d_wall_r,data_size));
+        checkCudaErrors(cudaMemcpy(d_wall_r,wall_r.data(),data_size,cudaMemcpyHostToDevice));
+//        grid_size = dim3(GRID_LEN, GRID_LEN);
+//        block_size = dim3((uint) ceil((float) this->height / GRID_LEN), (uint)ceil(
+//                (float) this->width / GRID_LEN));
+        kernel_gen_walls <<< grid_size, block_size>>>(d_vertices, d_gap_info, d_wall_r,this->height, this->width, num);
+        checkCudaErrors(cudaGetLastError());
+        checkCudaErrors(cudaDeviceSynchronize());
+        auto *h_results = new float[this->h_terrain_vertices.size() * sizeof(float)];
+        checkCudaErrors(cudaMemcpy(h_results, d_vertices, this->h_terrain_vertices.size() * sizeof(float),
+                                   cudaMemcpyDeviceToHost));
+        for (int i = 0; i < this->h_terrain_vertices.size(); ++i) {
+            h_terrain_vertices[i] = h_results[i];
+        }
+        free(h_results);
+        cudaFree(d_vertices);
+        cudaFree(d_gap_info);
+    }
+    void obstacle_terrain(uint num,glm::vec2 r){
+        std::random_device rd;
+        std::mt19937 mt(rd());
+        std::uniform_real_distribution<double> x_dist(0, height);
+        std::uniform_real_distribution<double> y_dist(0, width);
+        std::uniform_real_distribution<double> r_dist(r.x, r.y);
+        vector<int3> loc_list(num);
+        for(auto & i : loc_list){
+            i = make_int3(x_dist(mt),(uint)y_dist(mt),r_dist(mt));
+        }
+        int3 * d_loc_list;
+        checkCudaErrors(cudaMalloc(&d_loc_list,loc_list.size() * sizeof(float3)));
+        checkCudaErrors(cudaMemcpy(d_loc_list,loc_list.data(),loc_list.size()*sizeof(float3),cudaMemcpyHostToDevice));
+        std::size_t data_size = this->h_terrain_vertices.size() * sizeof(float);
+        float *d_vertices;
+        checkCudaErrors(cudaMalloc(&d_vertices, data_size));
+        checkCudaErrors(cudaMemcpy(d_vertices, h_terrain_vertices.data(), data_size, cudaMemcpyHostToDevice));
+        kernel_gen_obstacles<<<grid_size,block_size>>>(d_vertices,d_loc_list,loc_list.size(),height,width);
+        checkCudaErrors(cudaGetLastError());
+        checkCudaErrors(cudaDeviceSynchronize());
+        auto *h_results = new float[this->h_terrain_vertices.size() * sizeof(float)];
+        checkCudaErrors(cudaMemcpy(h_results, d_vertices, this->h_terrain_vertices.size() * sizeof(float),
+                                   cudaMemcpyDeviceToHost));
+        for (int i = 0; i < this->h_terrain_vertices.size(); ++i) {
+            h_terrain_vertices[i] = h_results[i];
+        }
+        free(h_results);
+        cudaFree(d_vertices);
+        cudaFree(d_loc_list);
+    }
     void export_obj(const string &name) {
         Obj obj;
         Vertex vertex;
