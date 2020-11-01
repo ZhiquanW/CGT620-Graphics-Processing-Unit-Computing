@@ -5,6 +5,10 @@
 // Copyright (c) 2020 Zhiquan Wang. All rights reserved.
 //
 #include "ZWEngine.h"
+#define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
+
+
+#include "tiny_obj_loader.h"
 
 //#define STB_IMAGE_IMPLEMENTATION
 //
@@ -20,7 +24,7 @@ std::vector<GLuint> terrain_indices;
 GLuint max_iter = 15000;
 GLuint iter = 0;
 float cam_dis = 1000.0f;
-GLfloat max_height=1.0f;
+GLfloat max_height = 1.0f;
 GLfloat timer = 0;
 bool random_signal = false;
 __constant__ float d_fault_info[4];
@@ -85,6 +89,55 @@ void export_terrain() {
 void ZWEngine::set_render_info() {
     glEnable(GL_DEPTH_TEST);
     srand(time(0));
+//    std::string inputfile = "test.obj";
+//    tinyobj::attrib_t attrib;
+//    std::vector<tinyobj::shape_t> shapes;
+//    std::vector<tinyobj::material_t> materials;
+//
+//    std::string warn;
+//    std::string err;
+//
+//    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, inputfile.c_str());
+//    if (!warn.empty()) {
+//        std::cout << warn << std::endl;
+//    }
+//    if (!err.empty()) {
+//        std::cerr << err << std::endl;
+//    }
+//    if (!ret) {
+//        exit(1);
+//    }
+//    std::cout <<"shape "  << shapes.size() << std::endl;
+//    // Loop over shapes
+//    for (size_t s = 0; s < shapes.size(); s++) {
+//        // Loop over faces(polygon)
+//        size_t index_offset = 0;
+//        for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+//            int fv = shapes[s].mesh.num_face_vertices[f];
+//            // Loop over vertices in the face.
+//            for (size_t v = 0; v < fv; v++) {
+//                // access to vertex
+//                tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+//                tinyobj::real_t vx = attrib.vertices[3*idx.vertex_index+0];
+//                tinyobj::real_t vy = attrib.vertices[3*idx.vertex_index+1];
+//                tinyobj::real_t vz = attrib.vertices[3*idx.vertex_index+2];
+//                std::cout<<" faces " << vx <<  " " << vy << " " << vz << std::endl;
+//                tinyobj::real_t nx = attrib.normals[3*idx.normal_index+0];
+//                tinyobj::real_t ny = attrib.normals[3*idx.normal_index+1];
+//                tinyobj::real_t nz = attrib.normals[3*idx.normal_index+2];
+//                tinyobj::real_t tx = attrib.texcoords[2*idx.texcoord_index+0];
+//                tinyobj::real_t ty = attrib.texcoords[2*idx.texcoord_index+1];
+//                // Optional: vertex colors
+//                // tinyobj::real_t red = attrib.colors[3*idx.vertex_index+0];
+//                // tinyobj::real_t green = attrib.colors[3*idx.vertex_index+1];
+//                // tinyobj::real_t blue = attrib.colors[3*idx.vertex_index+2];
+//            }
+//            index_offset += fv;
+//
+//            // per-face material
+//            shapes[s].mesh.material_ids[f];
+//        }
+//    }
 
     // Set Render
     self = this;
@@ -159,7 +212,7 @@ void ZWEngine::render_ui() {
     ImGui::SliderFloat("obj angle x: ", &obj_angle_x, -180.0f, 180.0f);
     ImGui::SliderFloat("camera dis:", &cam_dis, 0, 1200.0f);
     ImGui::SliderFloat2("camera angle:", &this->main_camera.get_pitch_yaw()[0], -180, 180);
-    ImGui::SliderFloat("terrain maximum height", & max_height,0.0f,10.0f);
+    ImGui::SliderFloat("terrain maximum height", &max_height, 0.0f, 10.0f);
     ImGui::Text("%s", std::to_string(timer).c_str());
     if (ImGui::Button("random")) {
         random_signal = true;
@@ -203,20 +256,20 @@ void ZWEngine::render_world() {
 
                     terrain_vertices[i] = pos.x;
                     terrain_vertices[i + 1] = pos.y;
-                    terrain_vertices[i + 2] = ((GLfloat)rand()/RAND_MAX) * max_height ;
+                    terrain_vertices[i + 2] = ((GLfloat) rand() / RAND_MAX) * max_height;
                     float3 color_0 = make_float3(0.0f, 0.0f, 0.8f);
                     float3 color_1 = make_float3(0.0f, 0.7, 0.0f);
-                    float3 col = color_0 + (color_1 - color_0) * ((max_height-terrain_vertices[i + 2])/max_height);
-                    terrain_vertices[i+3] = col.x;
-                    terrain_vertices[i+4] = col.y;
-                    terrain_vertices[i+5] = col.z;
+                    float3 col = color_0 + (color_1 - color_0) * ((max_height - terrain_vertices[i + 2]) / max_height);
+                    terrain_vertices[i + 3] = col.x;
+                    terrain_vertices[i + 4] = col.y;
+                    terrain_vertices[i + 5] = col.z;
 
                 }
                 if (ptr) {
                     std::copy(terrain_vertices.begin(), terrain_vertices.end(), ptr);
                     glUnmapBuffer(GL_ARRAY_BUFFER);
                 }
-                random_signal= false;
+                random_signal = false;
             }
         }
 
