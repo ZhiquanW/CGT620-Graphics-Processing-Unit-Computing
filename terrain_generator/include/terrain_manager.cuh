@@ -11,7 +11,7 @@
 using namespace std;
 using namespace wow;
 
-
+#include <math.h>
 class terrain_manager {
 
 public:
@@ -47,27 +47,19 @@ public:
     }
 
     void randomize(float max_h) {
-        glm::vec3 color_0(0.0f, 0.0f, 0.8f);
-        glm::vec3 color_1(0.0f, 0.7, 0.0f);
         for (int i = 0; i < this->h_terrain_vertices.size(); i += 6) {
             float h = i / 6 / this->width;
             float w = i / 6 % this->width;
-            this->h_terrain_vertices[i] = w;
-            this->h_terrain_vertices[i + 1] = h;
-            this->h_terrain_vertices[i + 2] = ((float) rand() / RAND_MAX) * max_h;
-            glm::vec3 col = color_0 + (color_1 - color_0) * ((max_h - this->h_terrain_vertices[i + 2]) / max_h);
-            this->h_terrain_vertices[i + 3] = col.x;
-            this->h_terrain_vertices[i + 4] = col.y;
-            this->h_terrain_vertices[i + 5] = col.z;
+            this->h_terrain_vertices[i + 2] += ((float) rand() / RAND_MAX) * max_h;
 
         }
     }
 
 
-    void gap_terrain(uint num, float r) {
+    void gap_terrain(uint num, float r,glm::vec2 range) {
         std::random_device rd;
         std::mt19937 mt(rd());
-        std::uniform_real_distribution<double> dist(0, height);
+        std::uniform_real_distribution<double> dist(range.x, range.y);
         vector<uint> gap_dis_list(num);
         for (int i = 0; i < num; ++i) {
             gap_dis_list[i] = (uint) dist(mt);
@@ -99,19 +91,20 @@ public:
         cudaFree(d_gap_info);
     }
 
-    void stair_terrain(glm::vec2 f_range, glm::vec2 stair_h_range) {
+    void stair_terrain(glm::vec2 f_range, glm::vec2 stair_h_range,glm::vec2 range) {
         vector<float> h_forward_info;
         vector<float> h_height_info;
         std::random_device rd;
         std::mt19937 mt(rd());
         std::uniform_real_distribution<float> forward_dist(f_range.x, f_range.y);
         std::uniform_real_distribution<float> h_dist(stair_h_range.x, stair_h_range.y);
-        h_forward_info.emplace_back(0.0f);
+        h_forward_info.emplace_back(range.x);
         h_height_info.emplace_back(0.0f);
+        float end_lin = min((float)this->height,range.y);
         while (true) {
             float new_forward = h_forward_info.back() + forward_dist(mt);
             float new_stair_height = h_height_info.back() + h_dist(mt);
-            if (new_forward > this->height) {
+            if (new_forward > end_lin) {
                 new_forward = this->height;
                 h_forward_info.emplace_back(new_forward);
                 h_height_info.emplace_back(new_stair_height);
@@ -149,10 +142,10 @@ public:
 
     }
 
-    void wall_terrain(uint num, glm::vec2 r){
+    void wall_terrain(uint num, glm::vec2 r,glm::vec2 range){
         std::random_device rd;
         std::mt19937 mt(rd());
-        std::uniform_real_distribution<double> dist(0, height);
+        std::uniform_real_distribution<double> dist(range.x, range.y);
         std::uniform_real_distribution<double> r_dist(r.x, r.y);
         vector<uint> gap_dis_list(num);
         vector<float> wall_r(num);
@@ -188,11 +181,11 @@ public:
         cudaFree(d_vertices);
         cudaFree(d_gap_info);
     }
-    void obstacle_terrain(uint num,glm::vec2 r){
+    void obstacle_terrain(uint num,glm::vec2 r,glm::vec2 range){
         std::random_device rd;
         std::mt19937 mt(rd());
-        std::uniform_real_distribution<double> x_dist(0, height);
-        std::uniform_real_distribution<double> y_dist(0, width);
+        std::uniform_real_distribution<double> x_dist(range.x, range.y);
+        std::uniform_real_distribution<double> y_dist(0,width);
         std::uniform_real_distribution<double> r_dist(r.x, r.y);
         vector<int3> loc_list(num);
         for(auto & i : loc_list){

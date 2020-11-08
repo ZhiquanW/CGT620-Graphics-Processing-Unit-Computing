@@ -32,7 +32,7 @@ kernel_gen_stairs(const float *d_forward_info, const float *d_height_indo, const
     unsigned int v_offset = 6 * (row_id * width + col_id);
     for (int i = 0; i < size - 1; ++i) {
         if (d_forward_info[i] < (float) row_id && (float) row_id < d_forward_info[i + 1]) {
-            d_vertices[v_offset + 2] = d_height_indo[i];
+            d_vertices[v_offset + 2] += d_height_indo[i];
         }
 
     }
@@ -52,7 +52,7 @@ kernel_gen_walls(float *d_vertices, const uint *d_gap_info, const float *d_wall_
         tmp_line = (float) d_gap_info[i];
         wall_range = d_wall_r[i];
         if (tmp_line - wall_range <= (float) row_id && (float) row_id <= tmp_line + wall_range) {
-            d_vertices[v_offset + 2] = 1;
+            d_vertices[v_offset + 2] += 1;
         }
     }
 }
@@ -73,7 +73,7 @@ __global__ void kernel_gen_obstacles(float *d_vertices, int3 *d_loc_list, uint n
             for (int x = start_x; x <= start_x + 2 * r;++ x){
                 for(int  y = start_y ; y <= start_y + 2 *r ;++ y){
                     uint tmp_offset = 6 * (x * width + y);
-                    d_vertices[tmp_offset+2] = 3;
+                    d_vertices[tmp_offset+2] += 3;
                 }
             }
         }

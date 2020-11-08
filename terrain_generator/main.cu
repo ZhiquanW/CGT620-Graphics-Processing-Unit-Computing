@@ -8,14 +8,14 @@ int main() {
     uint mesh_width = 500;
     uint mesh_height = 500;
     terrain_manager tm(mesh_height, mesh_width);
-//    tm.stair_terrain(glm::vec2(1,3),glm::vec2(0.2,1));
+    tm.stair_terrain(glm::vec2(1,3),glm::vec2(0.2,1),glm::vec2(0,100));
 //    tm.export_obj("test_stair");
-//    tm.gap_terrain(50, 3);
+    tm.gap_terrain(10, 3,glm::vec2(100,400));
 //    tm.export_obj("test_gap");
-//    tm.wall_terrain(30,glm::vec2(1,2));
-//    tm.export_obj("test_walls");
-    tm.obstacle_terrain(100,glm::vec2(1,3));
-    tm.export_obj("test");
+    tm.wall_terrain(30,glm::vec2(1,2),glm::vec2(200,300));
+    tm.obstacle_terrain(1000,glm::vec2(1,3),glm::vec2(100,200));
+    tm.randomize(0.2);
+    tm.export_obj("test_mixed_0");
     return 0;
 }
 
