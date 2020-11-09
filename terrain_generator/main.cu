@@ -3,6 +3,10 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
+# include <cassert>
+# include <iostream>
+# include <fstream>
+# include <sstream>
 
 int main() {
     uint mesh_width = 500;
@@ -14,11 +18,11 @@ int main() {
 //    tm.export_obj("test_gap");
     tm.wall_terrain(30,glm::vec2(1,2),glm::vec2(200,300));
     tm.obstacle_terrain(1000,glm::vec2(1,3),glm::vec2(100,200));
-    tm.randomize(0.2);
-    tm.export_obj("test_mixed_0");
+//    tm.uniforma_randomize(0.2);
+    tm.perlin_randomize();
+    tm.export_obj("test_mixed_perlin");
     return 0;
 }
-
 
 
 

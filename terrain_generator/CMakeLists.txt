@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
 
 include_directories(include)
-add_executable(terrain_generator main.cu test.cu include/utils.cuh include/kernels.cuh)
+add_executable(terrain_generator main.cu test.cu include/utils.cuh include/kernels.cuh include/PerlinNoise.cuh include/PerlinNoise.cu)
 
 set_target_properties(
         terrain_generator

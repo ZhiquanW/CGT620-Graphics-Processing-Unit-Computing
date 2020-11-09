@@ -7,7 +7,8 @@
 
 #include "utils.cuh"
 #include "kernels.cuh"
-
+#include "PerlinNoise.cuh"
+#include <cmath>
 using namespace std;
 using namespace wow;
 
@@ -46,12 +47,27 @@ public:
         }
     }
 
-    void randomize(float max_h) {
+    void uniforma_randomize(float max_h) {
         for (int i = 0; i < this->h_terrain_vertices.size(); i += 6) {
             float h = i / 6 / this->width;
             float w = i / 6 % this->width;
             this->h_terrain_vertices[i + 2] += ((float) rand() / RAND_MAX) * max_h;
 
+        }
+    }
+
+    void perlin_randomize(){
+        unsigned int seed = 237;
+        PerlinNoise pn(seed);
+        for (int i = 0; i < this->width; ++i) {
+            for (int j = 0; j < this->height; ++j) {
+                uint offset= (i * height + j) * 6;
+                double x = (double)j/((double)this->width);
+                double y = (double)i/((double)this->height);
+                double n = pn.noise( 100*x, 100*y, 0.8);
+                std::cout << offset << " " << n << std::endl;
+                this->h_terrain_vertices[offset+2] += n;
+            }
         }
     }
 
