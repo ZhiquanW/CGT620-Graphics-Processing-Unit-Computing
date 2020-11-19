@@ -9,10 +9,12 @@
 #include "kernels.cuh"
 #include "PerlinNoise.cuh"
 #include <cmath>
+
 using namespace std;
 using namespace wow;
 
 #include <math.h>
+
 class terrain_manager {
 
 public:
@@ -26,9 +28,9 @@ public:
     terrain_manager(uint h, uint w) : height(h),
                                       width(w),
                                       GRID_LEN(64),
-                                      grid_size(GRID_LEN,GRID_LEN),
-                                      block_size((uint) ceil((float) this->height / GRID_LEN), (uint)ceil(
-                                              (float) this->width / GRID_LEN)){
+                                      grid_size(GRID_LEN, GRID_LEN),
+                                      block_size((uint) ceil((float) this->height / GRID_LEN), (uint) ceil(
+                                              (float) this->width / GRID_LEN)) {
 //        h_terrain_vertices.resize(w * h * 6);
 
         this->init_flat();
@@ -56,23 +58,27 @@ public:
         }
     }
 
-    void perlin_randomize(){
+    void perlin_randomize() {
         unsigned int seed = 237;
         PerlinNoise pn(seed);
         for (int i = 0; i < this->width; ++i) {
             for (int j = 0; j < this->height; ++j) {
-                uint offset= (i * height + j) * 6;
-                double x = (double)j/((double)this->width);
-                double y = (double)i/((double)this->height);
-                double n = pn.noise( 100*x, 100*y, 0.8);
+                uint offset = (i * height + j) * 6;
+                double x = (double) j / ((double) this->width);
+                double y = (double) i / ((double) this->height);
+                double n = pn.noise(100 * x, 100 * y, 0.8);
                 std::cout << offset << " " << n << std::endl;
-                this->h_terrain_vertices[offset+2] += n;
+                this->h_terrain_vertices[offset + 2] += n;
             }
         }
     }
 
+    void add_bottom(float depth) {
 
-    void gap_terrain(uint num, float r,glm::vec2 range) {
+    }
+
+
+    void gap_terrain(uint num, float r, glm::vec2 range) {
         std::random_device rd;
         std::mt19937 mt(rd());
         std::uniform_real_distribution<double> dist(range.x, range.y);
@@ -107,7 +113,7 @@ public:
         cudaFree(d_gap_info);
     }
 
-    void stair_terrain(glm::vec2 f_range, glm::vec2 stair_h_range,glm::vec2 range) {
+    void stair_terrain(glm::vec2 f_range, glm::vec2 stair_h_range, glm::vec2 range) {
         vector<float> h_forward_info;
         vector<float> h_height_info;
         std::random_device rd;
@@ -116,7 +122,7 @@ public:
         std::uniform_real_distribution<float> h_dist(stair_h_range.x, stair_h_range.y);
         h_forward_info.emplace_back(range.x);
         h_height_info.emplace_back(0.0f);
-        float end_lin = min((float)this->height,range.y);
+        float end_lin = min((float) this->height, range.y);
         while (true) {
             float new_forward = h_forward_info.back() + forward_dist(mt);
             float new_stair_height = h_height_info.back() + h_dist(mt);
@@ -158,7 +164,7 @@ public:
 
     }
 
-    void wall_terrain(uint num, glm::vec2 r,glm::vec2 range){
+    void wall_terrain(uint num, glm::vec2 r, glm::vec2 range) {
         std::random_device rd;
         std::mt19937 mt(rd());
         std::uniform_real_distribution<double> dist(range.x, range.y);
@@ -178,13 +184,13 @@ public:
         uint *d_gap_info;
         checkCudaErrors(cudaMalloc(&d_gap_info, data_size));
         checkCudaErrors(cudaMemcpy(d_gap_info, gap_dis_list.data(), data_size, cudaMemcpyHostToDevice));
-        float * d_wall_r;
-        checkCudaErrors(cudaMalloc(&d_wall_r,data_size));
-        checkCudaErrors(cudaMemcpy(d_wall_r,wall_r.data(),data_size,cudaMemcpyHostToDevice));
+        float *d_wall_r;
+        checkCudaErrors(cudaMalloc(&d_wall_r, data_size));
+        checkCudaErrors(cudaMemcpy(d_wall_r, wall_r.data(), data_size, cudaMemcpyHostToDevice));
 //        grid_size = dim3(GRID_LEN, GRID_LEN);
 //        block_size = dim3((uint) ceil((float) this->height / GRID_LEN), (uint)ceil(
 //                (float) this->width / GRID_LEN));
-        kernel_gen_walls <<< grid_size, block_size>>>(d_vertices, d_gap_info, d_wall_r,this->height, this->width, num);
+        kernel_gen_walls <<< grid_size, block_size>>>(d_vertices, d_gap_info, d_wall_r, this->height, this->width, num);
         checkCudaErrors(cudaGetLastError());
         checkCudaErrors(cudaDeviceSynchronize());
         auto *h_results = new float[this->h_terrain_vertices.size() * sizeof(float)];
@@ -197,24 +203,26 @@ public:
         cudaFree(d_vertices);
         cudaFree(d_gap_info);
     }
-    void obstacle_terrain(uint num,glm::vec2 r,glm::vec2 range){
+
+    void obstacle_terrain(uint num, glm::vec2 r, glm::vec2 range) {
         std::random_device rd;
         std::mt19937 mt(rd());
         std::uniform_real_distribution<double> x_dist(range.x, range.y);
-        std::uniform_real_distribution<double> y_dist(0,width);
+        std::uniform_real_distribution<double> y_dist(0, width);
         std::uniform_real_distribution<double> r_dist(r.x, r.y);
         vector<int3> loc_list(num);
-        for(auto & i : loc_list){
-            i = make_int3(x_dist(mt),(uint)y_dist(mt),r_dist(mt));
+        for (auto &i : loc_list) {
+            i = make_int3(x_dist(mt), (uint) y_dist(mt), r_dist(mt));
         }
-        int3 * d_loc_list;
-        checkCudaErrors(cudaMalloc(&d_loc_list,loc_list.size() * sizeof(float3)));
-        checkCudaErrors(cudaMemcpy(d_loc_list,loc_list.data(),loc_list.size()*sizeof(float3),cudaMemcpyHostToDevice));
+        int3 *d_loc_list;
+        checkCudaErrors(cudaMalloc(&d_loc_list, loc_list.size() * sizeof(float3)));
+        checkCudaErrors(
+                cudaMemcpy(d_loc_list, loc_list.data(), loc_list.size() * sizeof(float3), cudaMemcpyHostToDevice));
         std::size_t data_size = this->h_terrain_vertices.size() * sizeof(float);
         float *d_vertices;
         checkCudaErrors(cudaMalloc(&d_vertices, data_size));
         checkCudaErrors(cudaMemcpy(d_vertices, h_terrain_vertices.data(), data_size, cudaMemcpyHostToDevice));
-        kernel_gen_obstacles<<<grid_size,block_size>>>(d_vertices,d_loc_list,loc_list.size(),height,width);
+        kernel_gen_obstacles<<<grid_size, block_size>>>(d_vertices, d_loc_list, loc_list.size(), height, width);
         checkCudaErrors(cudaGetLastError());
         checkCudaErrors(cudaDeviceSynchronize());
         auto *h_results = new float[this->h_terrain_vertices.size() * sizeof(float)];
@@ -227,6 +235,7 @@ public:
         cudaFree(d_vertices);
         cudaFree(d_loc_list);
     }
+
     void export_obj(const string &name) {
         Obj obj;
         Vertex vertex;
@@ -265,6 +274,66 @@ public:
                 vertex.setPosition(v_5.x, v_5.y, v_5.z);
                 obj.appendVertex(vertex);
                 obj.closeFace();
+            }
+        }
+        // add bottom
+        float min_val = -10.0f;
+        for (int i = 0; i < this->width; ++i) {
+            for (int j = 0; j < this->height; ++j) {
+                uint offset = (i * height + j) * 6;
+                if (this->h_terrain_vertices[offset + 2] < min_val) {
+                    min_val = this->h_terrain_vertices[offset + 2];
+                }
+            }
+        }
+        min_val -= 10.0f;
+        Vec3 v_0(0, 0, this->h_terrain_vertices[0 + 2]);
+        Vec3 v_1(width, 0, this->h_terrain_vertices[this->width * this->height + 2]);
+        Vec3 v_2(0, height, this->h_terrain_vertices[this->height + 2]);
+        Vec3 v_3(width, height, this->h_terrain_vertices[this->width * this->height + this->height + 2]);
+        Vec3 v_b0(0, 0, min_val);
+        Vec3 v_b1(width, 0, min_val);
+        Vec3 v_b2(0, height, min_val);
+        Vec3 v_b3(width, height, min_val);
+        // bottom face
+        vertex.setPosition(v_0.x, v_0.y, v_0.z);
+        obj.appendVertex(vertex);
+        vertex.setPosition(v_1.x, v_1.y, v_1.z);
+        obj.appendVertex(vertex);
+        vertex.setPosition(v_2.x, v_2.y, v_2.z);
+        obj.appendVertex(vertex);
+        vertex.setPosition(v_3.x, v_3.y, v_3.z);
+        obj.appendVertex(vertex);
+        obj.closeFace();
+        vertex.setPosition(v_1.x, v_1.y, v_1.z);
+        obj.appendVertex(vertex);
+        vertex.setPosition(v_2.x, v_2.y, v_2.z);
+        obj.appendVertex(vertex);
+        obj.closeFace();
+        obj.output(name);
+    }
+
+    void new_export(const string &name) {
+        Obj obj;
+        uint counter = 0;
+        for (int i = 0; i < this->width; ++i) {
+            for (int j = 0; j < this->height; ++j) {
+                uint offset = i * this->height + j;
+                obj.appendVertex(this->h_terrain_vertices[offset * 6],
+                                 this->h_terrain_vertices[offset * 6 + 1],
+                                 this->h_terrain_vertices[offset * 6 + 2]);
+                counter += 1;
+
+            }
+        }
+        std::cout<<"A: " << counter << std::endl;
+        for (int i = 0; i < this->width - 1; ++i) {
+            for (int j = 0; j < this->height - 1; ++j) {
+                uint offset = i * this->height + j;
+                std::cout << offset <<" "<< offset +1 <<" "<< offset + height<<std::endl;
+                std::cout << offset + 1<<" "<< offset + height + 1 <<" "<< offset + height<<std::endl;
+                obj.appendFace(offset, offset + 1, offset + height);
+                obj.appendFace(offset + 1, offset + height + 1, offset + height);
             }
         }
         obj.output(name);

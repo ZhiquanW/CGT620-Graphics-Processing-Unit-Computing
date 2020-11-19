@@ -183,8 +183,8 @@ public:
     int getVertexCount() {
       return this->vertices.size();
     }
-    void appendFace(const std::int32_t& v0, const std::int32_t& v1, const std::int32_t& v2, const std::int32_t& v3=-1){
-        faces.push_back(Face(v0, v1, v2, v3));
+    void appendFace(const std::int32_t& v0, const std::int32_t& v1, const std::int32_t& v2){
+        faces.push_back(Face(v0, v1, v2));
         unusedVerticesCount = 0;
     }
     void closeFace(){

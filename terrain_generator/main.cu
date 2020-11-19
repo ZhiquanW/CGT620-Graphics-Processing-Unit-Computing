@@ -9,8 +9,8 @@
 # include <sstream>
 
 int main() {
-    uint mesh_width = 500;
-    uint mesh_height = 500;
+    uint mesh_width = 2;
+    uint mesh_height = 2;
     terrain_manager tm(mesh_height, mesh_width);
     tm.stair_terrain(glm::vec2(1,3),glm::vec2(0.2,1),glm::vec2(0,100));
 //    tm.export_obj("test_stair");
@@ -20,7 +20,7 @@ int main() {
     tm.obstacle_terrain(1000,glm::vec2(1,3),glm::vec2(100,200));
 //    tm.uniforma_randomize(0.2);
     tm.perlin_randomize();
-    tm.export_obj("test_mixed_perlin");
+    tm.new_export("test_mixed_perlin");
     return 0;
 }
 
